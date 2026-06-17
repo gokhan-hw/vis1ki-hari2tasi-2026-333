@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Dünya Viski Haritası — Ülkeler, Bölgeler, Damıtımevleri</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{
+    --bg:#16120d; --panel:#211a12; --panel2:#2a2118; --text:#f0e6d6; --muted:#b8a888;
+    --amber:#d99a3d; --border:#3a2f20;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:Georgia,'Times New Roman',serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px}
+  header h1{font-size:1.5rem;letter-spacing:.5px;color:var(--amber)}
+  header p{color:var(--muted);font-size:.9rem;margin-top:4px}
+  .notice{
+    margin-top:10px;background:var(--panel);border:1px solid var(--border);border-radius:10px;
+    padding:10px 16px;font-size:.78rem;color:var(--muted);line-height:1.5;
+  }
+  .notice a{color:var(--amber);text-decoration:none}
+  .countries{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-top:20px}
+  .ccard{
+    background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 16px;
+    cursor:pointer;transition:all .18s;display:flex;flex-direction:column;gap:6px;
+  }
+  .ccard:hover{background:var(--panel2);border-color:var(--amber);transform:translateY(-3px)}
+  .ccard .flag{font-size:1.9rem}
+  .ccard .cname{color:var(--amber);font-size:1.08rem}
+  .ccard .ccount{color:var(--muted);font-size:.8rem}
+  .ccard .cdesc{color:var(--muted);font-size:.78rem;line-height:1.45;margin-top:2px}
+  .back{
+    background:none;border:1px solid var(--border);color:var(--muted);padding:7px 16px;border-radius:8px;
+    cursor:pointer;font-family:inherit;font-size:.85rem;margin-bottom:12px;transition:all .15s;
+  }
+  .back:hover{color:var(--amber);border-color:var(--amber)}
+  .ctitle{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .ctitle h2{color:var(--amber);font-size:1.25rem}
+  .ctitle .flag{font-size:1.5rem}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+  .chip{
+    border:1px solid var(--border);background:var(--panel);color:var(--text);
+    padding:7px 13px;border-radius:30px;cursor:pointer;font-family:inherit;font-size:.85rem;
+    display:flex;align-items:center;gap:8px;transition:all .15s;
+  }
+  .chip:hover{background:var(--panel2);transform:translateY(-1px)}
+  .chip.active{border-color:var(--amber);background:var(--panel2);box-shadow:0 0 0 1px var(--amber)}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .chip .n{color:var(--muted);font-size:.75rem}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  #search{
+    flex:1;min-width:200px;background:var(--panel);border:1px solid var(--border);color:var(--text);
+    padding:9px 14px;border-radius:8px;font-family:inherit;font-size:.9rem;outline:none;
+  }
+  #search:focus{border-color:var(--amber)}
+  #map{height:540px;border-radius:12px;border:1px solid var(--border)}
+  .info{
+    margin-top:14px;background:var(--panel);border:1px solid var(--border);border-radius:12px;
+    padding:14px 18px;min-height:54px;color:var(--muted);font-size:.92rem;line-height:1.5;
+  }
+  .info b{color:var(--amber)}
+  .leaflet-popup-content-wrapper{background:var(--panel2);color:var(--text);border-radius:10px;border:1px solid var(--amber)}
+  .leaflet-popup-tip{background:var(--panel2)}
+  .pp h3{color:var(--amber);font-size:1rem;margin-bottom:4px;font-family:Georgia,serif}
+  .pp div{font-size:.82rem;color:var(--muted);line-height:1.5}
+  .pp .reg{display:inline-block;padding:1px 8px;border-radius:10px;font-size:.72rem;color:#16120d;margin-bottom:6px}
+  footer{margin-top:12px;color:var(--muted);font-size:.75rem;text-align:center;opacity:.7}
+  .hidden{display:none}
+  @media(max-width:640px){#map{height:430px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ÜLKE SEÇİM EKRANI -->
+  <div id="home">
+    <header>
+      <h1>🥃 Dünya Viski Haritası</h1>
+      <p>Ülke veya bölge seçin — viski bölgeleri ve damıtımevleri interaktif haritada açılır.</p>
+    </header>
+    <div class="notice">
+      Bu harita; Wikipedia, Whisky Magazine, The Spirits Business, üretici siteleri ve SWA gibi açık kaynaklardan derlenerek çapraz doğrulanmıştır. Yalnızca piyasaya çıkmış viski üreten damıtımevleri gösterilmektedir. Bir hata fark ederseniz lütfen bizimle paylaşın.
+    </div>
+    <div class="countries" id="countries"></div>
+    <footer id="homefoot"></footer>
+  </div>
+
+  <!-- HARİTA EKRANI -->
+  <div id="mapview" class="hidden">
+    <button class="back" id="backbtn">← Ülke Seç</button>
+    <div class="ctitle"><span class="flag" id="cflag"></span><h2 id="cname"></h2></div>
+    <div class="chips" id="chips"></div>
+    <div class="toolbar">
+      <input id="search" type="text" placeholder="Damıtımevi ara…">
+    </div>
+    <div id="map"></div>
+    <div class="info" id="info"></div>
+    <footer>Kaynaklar: SWA · Scotch Whisky Regulations 2009 · Wikipedia · Whisky Magazine · Whisky Advocate · Master of Malt · The Spirits Business · üretici siteleri · çapraz doğrulama (2026)</footer>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const PALETTE = ["#e0b341","#c96f3f","#7fae6a","#5a8f8f","#b85c6e","#8a7fc4","#cc8f5e","#6a9ab0"];
+
+const COUNTRIES = {
+
+"İskoçya": {
+  flag:"🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+  desc:"Viskinin kalbi: 5 resmî bölge. 150'den fazla aktif malt damıtımevi.",
+  regions:{
+    "Speyside":"Spey Nehri çevresi; zarif, meyvemsi, bal ve sherry karakteri. Macallan, Glenfiddich, Glenlivet'in evi.",
+    "Highland":"En geniş bölge — adalar dahil. Kıyıdan tuzlu-isli, iç kesimden ballı ve çiçeksi karakterlere uzanan geniş yelpaze.",
+    "Lowland":"Hafif, çimensi, çiçeksi 'aperitif' viskiler; üçlü damıtma geleneği.",
+    "Islay":"Turba ve is: deniz tuzu, iyot, duman. Ardbeg, Lagavulin, Laphroaig'in vatanı.",
+    "Campbeltown":"Bir zamanlar 30+ damıtımeviyle viskinin başkenti; bugün 3 kült damıtımevi."
+  },
+  list:[
+["Aberlour","Speyside",57.466,-3.227,1879,"Chivas Brothers","Aberlour"],
+["Allt-A-Bhainne","Speyside",57.395,-3.165,1975,"Chivas Brothers","Glenrinnes"],
+["Auchroisk","Speyside",57.510,-3.075,1972,"Diageo","Mulben"],
+["Aultmore","Speyside",57.585,-2.978,1895,"John Dewar & Sons","Keith"],
+["Ballindalloch","Speyside",57.387,-3.348,2014,"Ballindalloch Distillery LLP","Ballindalloch"],
+["Balmenach","Speyside",57.345,-3.485,1824,"Inver House","Cromdale"],
+["Balvenie","Speyside",57.4545,-3.1283,1892,"William Grant & Sons","Dufftown"],
+["BenRiach","Speyside",57.595,-3.300,1898,"Brown-Forman","Longmorn"],
+["Benrinnes","Speyside",57.426,-3.265,1826,"Diageo","Aberlour"],
+["Benromach","Speyside",57.617,-3.616,1898,"Gordon & MacPhail","Forres"],
+["Braeval","Speyside",57.305,-3.295,1973,"Chivas Brothers","Chapeltown"],
+["Cabrach","Speyside",57.345,-3.025,2024,"The Cabrach Trust","Cabrach"],
+["The Cairn","Speyside",57.347,-3.575,2022,"Gordon & MacPhail","Grantown-on-Spey"],
+["Cardhu","Speyside",57.464,-3.380,1824,"Diageo","Knockando"],
+["Cragganmore","Speyside",57.397,-3.387,1869,"Diageo","Ballindalloch"],
+["Craigellachie","Speyside",57.490,-3.183,1891,"John Dewar & Sons","Craigellachie"],
+["Dailuaine","Speyside",57.445,-3.290,1852,"Diageo","Aberlour"],
+["Dalmunach","Speyside",57.448,-3.305,2015,"Chivas Brothers","Carron"],
+["Dufftown","Speyside",57.443,-3.123,1895,"Diageo","Dufftown"],
+["Dunphail","Speyside",57.530,-3.625,2023,"Bimber","Edinkillie"],
+["GlenAllachie","Speyside",57.456,-3.250,1967,"GlenAllachie Distillers","Aberlour"],
+["Glenburgie","Speyside",57.610,-3.500,1810,"Chivas Brothers","Forres"],
+["Glendullan","Speyside",57.450,-3.115,1897,"Diageo","Dufftown"],
+["Glen Elgin","Speyside",57.585,-3.295,1898,"Diageo","Fogwatt"],
+["Glenfarclas","Speyside",57.405,-3.318,1836,"J. & G. Grant","Ballindalloch"],
+["Glenfiddich","Speyside",57.4555,-3.1270,1886,"William Grant & Sons","Dufftown"],
+["Glen Grant","Speyside",57.530,-3.205,1840,"Campari","Rothes"],
+["Glen Keith","Speyside",57.540,-2.950,1957,"Chivas Brothers","Keith"],
+["The Glenlivet","Speyside",57.343,-3.337,1824,"Chivas Brothers","Ballindalloch"],
+["Glenlossie","Speyside",57.595,-3.355,1876,"Diageo","Elgin"],
+["Glen Moray","Speyside",57.648,-3.337,1897,"La Martiniquaise","Elgin"],
+["The Glenrothes","Speyside",57.528,-3.210,1879,"Edrington","Rothes"],
+["Glen Spey","Speyside",57.527,-3.205,1878,"Diageo","Rothes"],
+["Glentauchers","Speyside",57.530,-3.030,1897,"Chivas Brothers","Mulben"],
+["Inchgower","Speyside",57.665,-2.975,1871,"Diageo","Buckie"],
+["Kininvie","Speyside",57.460,-3.135,1990,"William Grant & Sons","Dufftown"],
+["Knockando","Speyside",57.465,-3.370,1898,"Diageo","Knockando"],
+["Knockdhu (anCnoc)","Speyside",57.595,-2.785,1894,"Inver House","Knock"],
+["Linkwood","Speyside",57.630,-3.290,1821,"Diageo","Elgin"],
+["Longmorn","Speyside",57.605,-3.300,1893,"Chivas Brothers","Elgin"],
+["The Macallan","Speyside",57.484,-3.205,1824,"Edrington","Craigellachie"],
+["Mannochmore","Speyside",57.590,-3.355,1971,"Diageo","Elgin"],
+["Miltonduff","Speyside",57.630,-3.360,1824,"Chivas Brothers","Elgin"],
+["Mortlach","Speyside",57.443,-3.122,1823,"Diageo","Dufftown"],
+["Roseisle","Speyside",57.685,-3.430,2010,"Diageo","Roseisle"],
+["Speyburn","Speyside",57.535,-3.210,1897,"Inver House","Rothes"],
+["Speyside","Speyside",57.060,-3.985,1990,"Harvey's of Edinburgh","Drumguish"],
+["Strathisla","Speyside",57.538,-2.948,1786,"Chivas Brothers","Keith"],
+["Strathmill","Speyside",57.540,-2.955,1891,"Diageo","Keith"],
+["Tamdhu","Speyside",57.460,-3.375,1897,"Ian Macleod","Knockando"],
+["Tamnavulin","Speyside",57.310,-3.320,1966,"Whyte & Mackay","Tomnavoulin"],
+["Tomintoul","Speyside",57.290,-3.355,1964,"Angus Dundee","Kirkmichael"],
+["Tormore","Speyside",57.380,-3.450,1958,"Elixir Distillers","Advie"],
+["Aberfeldy","Highland",56.622,-3.853,1896,"John Dewar & Sons","Aberfeldy"],
+["Arbikie","Highland",56.585,-2.560,2013,"Arbikie Highland Estate","Inverkeilor"],
+["Ardmore","Highland",57.355,-2.700,1898,"Suntory Global Spirits","Kennethmont"],
+["Ardnamurchan","Highland",56.728,-6.003,2014,"Adelphi","Glenbeg"],
+["Ardross","Highland",57.745,-4.355,2019,"Greenwood Distillers","Alness"],
+["Balblair","Highland",57.825,-4.155,1790,"Inver House","Edderton"],
+["Balmaud","Highland",57.540,-2.470,2024,"Balmaud Distillery Co.","Turriff"],
+["Ben Nevis","Highland",56.825,-5.083,1825,"Nikka","Fort William"],
+["Blair Athol","Highland",56.698,-3.728,1798,"Diageo","Pitlochry"],
+["Brora","Highland",58.012,-3.855,1819,"Diageo","Brora"],
+["Burn O'Bennie","Highland",57.055,-2.500,2021,"Deeside Distillery","Banchory"],
+["Clynelish","Highland",58.015,-3.860,1967,"Diageo","Brora"],
+["The Dalmore","Highland",57.690,-4.245,1839,"Whyte & Mackay","Alness"],
+["Dalwhinnie","Highland",56.940,-4.245,1898,"Diageo","Dalwhinnie"],
+["Deanston","Highland",56.190,-4.070,1965,"Distell","Doune"],
+["Dornoch","Highland",57.880,-4.030,2017,"Dornoch Distillery Co.","Dornoch"],
+["Edradour","Highland",56.705,-3.705,1825,"Signatory","Pitlochry"],
+["Fettercairn","Highland",56.850,-2.575,1824,"Whyte & Mackay","Fettercairn"],
+["Glencadam","Highland",56.733,-2.660,1825,"Angus Dundee","Brechin"],
+["GlenDronach","Highland",57.465,-2.625,1826,"Brown-Forman","Forgue"],
+["Glen Garioch","Highland",57.335,-2.318,1797,"Suntory Global Spirits","Oldmeldrum"],
+["Glenglassaugh","Highland",57.685,-2.715,1875,"Brown-Forman","Portsoy"],
+["Glengoyne","Highland",56.020,-4.380,1833,"Ian Macleod","Dumgoyne"],
+["Glenmorangie","Highland",57.820,-4.075,1843,"LVMH","Tain"],
+["Glen Ord","Highland",57.520,-4.465,1838,"Diageo","Muir of Ord"],
+["The Glenturret","Highland",56.378,-3.870,1763,"Lalique Group","Crieff"],
+["GlenWyvis","Highland",57.600,-4.445,2015,"GlenWyvis (kooperatif)","Dingwall"],
+["Kythe","Highland",56.590,-3.340,2025,"Kythe Distillery Co.","Blairgowrie"],
+["Loch Lomond","Highland",55.995,-4.575,1964,"Loch Lomond Group","Alexandria"],
+["Macduff","Highland",57.670,-2.490,1960,"John Dewar & Sons","Banff"],
+["Nc'nean","Highland",56.615,-5.985,2017,"Drimnin Distillery Co.","Drimnin"],
+["North Point","Highland",58.590,-3.520,2023,"North Coast Distillers","Thurso"],
+["Oban","Highland",56.415,-5.472,1794,"Diageo","Oban"],
+["Old Pulteney","Highland",58.435,-3.090,1826,"Inver House","Wick"],
+["Royal Brackla","Highland",57.560,-3.855,1812,"John Dewar & Sons","Cawdor"],
+["Royal Lochnagar","Highland",57.035,-3.205,1845,"Diageo","Ballater"],
+["Stannergill","Highland",58.585,-3.385,2025,"Dunnet Bay Distillers","Caithness"],
+["Strathearn","Highland",56.415,-3.585,2013,"Douglas Laing","Methven"],
+["Teaninich","Highland",57.695,-4.265,1817,"Diageo","Alness"],
+["Tomatin","Highland",57.340,-4.000,1897,"Takara Shuzo","Tomatin"],
+["Toulvaddie","Highland",57.765,-3.935,2022,"Heather & Bobby Nelson","Fearn"],
+["Tullibardine","Highland",56.260,-3.790,1949,"Picard Vins & Spiritueux","Blackford"],
+["Uile-bheist","Highland",57.475,-4.225,2023,"Erasmus ailesi","Inverness"],
+["Wolfburn","Highland",58.595,-3.535,1822,"Aurora Brewing","Thurso"],
+["8 Doors","Highland",58.640,-3.070,2022,"Kerry & Derek Campbell","John O'Groats"],
+["Abhainn Dearg","Highland",58.185,-7.025,2008,"Mark Tayburn","Uig, Lewis"],
+["Benbecula","Highland",57.455,-7.305,2024,"Angus A. MacMillan","Benbecula"],
+["Deerness","Highland",58.940,-2.760,2016,"Deerness Distillery","Orkney"],
+["Isle of Harris","Highland",57.895,-6.800,2015,"Isle of Harris Distillers","Tarbert"],
+["Highland Park","Highland",58.968,-2.955,1798,"Edrington","Kirkwall, Orkney"],
+["Jura","Highland",55.835,-5.950,1810,"Whyte & Mackay","Craighouse, Jura"],
+["Kimbland","Highland",59.255,-2.575,2017,"Kimbland Distillery","Sanday, Orkney"],
+["Lagg","Highland",55.455,-5.165,2019,"Isle of Arran Distillers","Arran"],
+["Lerwick","Highland",60.155,-1.145,2022,"Lerwick Distillery","Shetland"],
+["Lochranza (Arran)","Highland",55.705,-5.300,1995,"Isle of Arran Distillers","Arran"],
+["North Uist","Highland",57.445,-7.350,2024,"North Uist Distillery Co.","Benbecula"],
+["Orkney (Kirkjuvagr)","Highland",58.985,-2.960,2018,"Orkney Distilling","Kirkwall"],
+["Isle of Raasay","Highland",57.350,-6.080,2014,"R&B Distillers","Raasay"],
+["Saxa Vord","Highland",60.815,-0.835,2015,"Shetland Distillery Co.","Unst, Shetland"],
+["Scapa","Highland",58.960,-2.985,1885,"Chivas Brothers","Kirkwall, Orkney"],
+["Talisker","Highland",57.302,-6.355,1830,"Diageo","Carbost, Skye"],
+["Tiree","Highland",56.500,-6.880,2019,"Tiree Whisky Co.","Tiree"],
+["Tobermory","Highland",56.620,-6.070,1798,"Distell","Mull"],
+["Torabhaig","Highland",57.125,-5.855,2017,"Mossburn Distillers","Teangue, Skye"],
+["Aberargie","Lowland",56.345,-3.385,2017,"Morrison Distillers","Aberargie"],
+["Ailsa Bay","Lowland",55.255,-4.835,2009,"William Grant & Sons","Girvan"],
+["Annandale","Lowland",54.995,-3.270,1836,"Annandale Distillery Co.","Annan"],
+["Ardgowan","Lowland",55.905,-4.870,1896,"Ardgowan Distillery Co.","Inverkip"],
+["Auchentoshan","Lowland",55.922,-4.438,1823,"Suntory Global Spirits","Clydebank"],
+["Ben Cumhaill","Lowland",55.070,-3.605,2025,"Simpson ailesi","Dumfries"],
+["Blackness","Lowland",55.978,-3.600,2024,"Colm O'Rourke","Linlithgow"],
+["Bladnoch","Lowland",54.860,-4.460,1817,"David Prior","Wigtown"],
+["Bonnington","Lowland",55.970,-3.180,2020,"Halewood","Edinburgh"],
+["The Borders","Lowland",55.425,-2.785,2018,"Three Stills Co.","Hawick"],
+["The Clydeside","Lowland",55.860,-4.305,2017,"Morrison Glasgow","Glasgow"],
+["Daftmill","Lowland",56.300,-3.080,2005,"Cuthbert ailesi","Cupar, Fife"],
+["Eden Mill","Lowland",56.355,-2.885,2012,"Eden Mill","Guardbridge"],
+["Falkirk","Lowland",55.985,-3.755,2020,"Fiona Stewart","Falkirk"],
+["Galloway","Lowland",54.985,-4.500,2017,"Sam Heughan","Galloway"],
+["Glasgow Distillery","Lowland",55.855,-4.380,2015,"Glasgow Distillery Co.","Hillington"],
+["Glenkinchie","Lowland",55.890,-2.890,1837,"Diageo","Pencaitland"],
+["Holyrood","Lowland",55.945,-3.175,2019,"Holyrood Distillery","Edinburgh"],
+["InchDairnie","Lowland",56.190,-3.205,2015,"John Fergus & Co.","Glenrothes, Fife"],
+["Jackton","Lowland",55.755,-4.255,2020,"RAER Spirits","Jackton"],
+["Kingsbarns","Lowland",56.295,-2.660,2014,"Wemyss ailesi","Kingsbarns"],
+["Leven","Lowland",56.195,-3.000,2013,"Diageo","Leven"],
+["Lindores Abbey","Lowland",56.350,-3.230,2017,"Lindores Distilling Co.","Newburgh"],
+["Lochlea","Lowland",55.515,-4.480,2018,"Lochlea Distilling","Tarbolton"],
+["Moffat","Lowland",55.335,-3.440,2023,"Dark Sky Spirits","Moffat"],
+["Port of Leith","Lowland",55.980,-3.170,2023,"Muckle Brig","Edinburgh"],
+["Rosebank","Lowland",55.995,-3.795,1798,"Ian Macleod","Falkirk"],
+["Stirling","Lowland",56.120,-3.940,2015,"McCann ailesi","Stirling"],
+["Ardbeg","Islay",55.640,-6.108,1815,"LVMH","Port Ellen"],
+["Ardnahoe","Islay",55.875,-6.130,2019,"Hunter Laing","Port Askaig"],
+["Bowmore","Islay",55.757,-6.290,1779,"Suntory Global Spirits","Bowmore"],
+["Bruichladdich","Islay",55.765,-6.360,1881,"Rémy Cointreau","Rhinns of Islay"],
+["Bunnahabhain","Islay",55.885,-6.135,1881,"Distell","Port Askaig"],
+["Caol Ila","Islay",55.855,-6.110,1846,"Diageo","Port Askaig"],
+["Kilchoman","Islay",55.785,-6.435,2005,"Kilchoman Distillery Co.","Kilchoman"],
+["Lagavulin","Islay",55.635,-6.127,1816,"Diageo","Port Ellen"],
+["Laphroaig","Islay",55.630,-6.150,1815,"Suntory Global Spirits","Port Ellen"],
+["Port Ellen","Islay",55.628,-6.190,1825,"Diageo","Port Ellen"],
+["Laggan Bay","Islay",55.685,-6.255,2025,"Ian Macleod","Glenegedale"],
+["Springbank","Campbeltown",55.4253,-5.6047,1828,"J&A Mitchell","Campbeltown"],
+["Glen Scotia","Campbeltown",55.4281,-5.6068,1832,"Loch Lomond Group","Campbeltown"],
+["Glengyle (Kilkerran)","Campbeltown",55.4262,-5.6056,1872,"Mitchell's Glengyle","Campbeltown"]
+]},
+
+"İngiltere": {
+  flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+  desc:"Yeni dalga İngiliz viskisi: çapraz doğrulanmış 41 aktif üretici — hepsi piyasaya çıkmış viski üreten damıtımevleri.",
+  regions:{
+    "Kuzey İngiltere":"Lake District, Yorkshire, Northumberland ve Goole'dan öne çıkan üreticiler.",
+    "Midlands":"Cotswolds (İngiltere'nin en büyüğü), White Peak (Wire Works) ve çevre craft üreticileri.",
+    "Doğu İngiltere":"Modern İngiliz viskisinin doğum yeri: The English Distillery (2006), bir asır sonra İngiltere'nin ilk viskisini üretti.",
+    "Londra & Güneydoğu":"Bimber'in kült single malt'ları, Doghouse, East London Liquor ve Kent-Sussex hattı.",
+    "Güneybatı":"Cornwall ve Devon'ın craft dalgası; Dartmoor'un granit yaylasından Somerset'e."
+  },
+  list:[
+["Durham","Kuzey İngiltere",54.775,-1.575,2013,"Durham Distillery","Durham"],
+["Weetwood","Kuzey İngiltere",53.205,-2.665,2018,"Weetwood Ales","Kelsall, Cheshire"],
+["Forest","Kuzey İngiltere",53.245,-2.030,2014,"Forest Distillery","Macclesfield"],
+["Forgan","Kuzey İngiltere",53.695,-2.925,2017,"Forgan Distillery","Banks, Lancashire"],
+["Cooper King","Kuzey İngiltere",54.080,-1.100,2016,"Jaume & Neilson","Sutton-on-the-Forest, York"],
+["Ellers Farm","Kuzey İngiltere",53.990,-0.910,2022,"Ellers Farm Distillery","Stamford Bridge"],
+["Elsham Wold","Kuzey İngiltere",53.605,-0.435,2019,"Elsham Wold Distillery","Elsham, Lincolnshire"],
+["Spirit of Yorkshire","Kuzey İngiltere",54.180,-0.330,2016,"Mellor & Jaume","Hunmanby"],
+["The Lakes","Kuzey İngiltere",54.670,-3.270,2011,"Nyetimber","Setmurthy, Lake District"],
+["Whittaker's","Kuzey İngiltere",54.060,-1.700,2015,"Whittaker ailesi","Harrogate"],
+["Yarm","Kuzey İngiltere",54.510,-1.355,2018,"Yarm Distillery","Yarm"],
+["Ad Gefrin","Kuzey İngiltere",55.545,-2.010,2022,"Ferguson ailesi","Wooler, Northumberland"],
+["Fielden (eski TOAD)","Kuzey İngiltere",53.705,-0.875,2017,"Fielden","Goole, Yorkshire"],
+["White Peak","Midlands",53.060,-1.480,2016,"Max & Claire Vaughan","Ambergate, Derbyshire"],
+["Wharf","Midlands",52.130,-0.990,2011,"Wharf Distillery","Towcester"],
+["Henstone","Midlands",52.860,-3.050,2017,"Henstone Distillery","Oswestry, Shropshire"],
+["Ludlow","Midlands",52.440,-2.835,2014,"Ludlow Distillery","Craven Arms, Shropshire"],
+["Spirit of Birmingham","Midlands",52.480,-1.900,2020,"Spirit of Birmingham","Birmingham"],
+["Mercia","Midlands",52.780,-1.990,2020,"Mercia Whisky","Wolseley Bridge, Staffordshire"],
+["West Midlands Distillery","Midlands",52.480,-2.050,2017,"West Midlands Distillery","Rowley Regis"],
+["Cotswolds","Midlands",52.085,-1.560,2014,"Cotswolds Distillery","Stourton, Warwickshire"],
+["The English Distillery","Doğu İngiltere",52.455,0.860,2006,"Nelstrop ailesi (St George's)","Roudham, Norfolk"],
+["Adnams","Doğu İngiltere",52.327,1.680,2010,"Adnams plc","Southwold, Suffolk"],
+["Bimber","Londra & Güneydoğu",51.525,-0.260,2015,"Dariusz Plazewski","North Acton, Londra"],
+["East London Liquor Co.","Londra & Güneydoğu",51.535,-0.035,2014,"ELLC","Tower Hamlets, Londra"],
+["Old Bakery","Londra & Güneydoğu",51.650,-0.080,2017,"Old Bakery Distillery","Enfield, Londra"],
+["Doghouse","Londra & Güneydoğu",51.470,-0.165,2016,"Doghouse Distillery","Battersea, Londra"],
+["The London Distilling Co.","Londra & Güneydoğu",51.495,-0.075,2011,"Gleann Mor Spirits","Bermondsey, Londra"],
+["Canterbury Brewers & Distillers","Londra & Güneydoğu",51.280,1.080,2018,"Canterbury B&D","Canterbury, Kent"],
+["Copper Rivet","Londra & Güneydoğu",51.395,0.525,2016,"Russell ailesi","Chatham, Kent"],
+["Wight Distillery","Londra & Güneydoğu",50.670,-1.300,2023,"Wight Distillery","Wight Adası"],
+["Hawkridge","Londra & Güneydoğu",51.400,-1.320,2018,"Hawkridge Distillers","Newbury, Berkshire"],
+["Brightwell Bottle","Londra & Güneydoğu",51.600,-1.125,2016,"Brightwell Bottle Distillery","Wallingford, Oxfordshire"],
+["Retribution","Güneybatı",51.230,-2.320,2019,"Retribution Distilling","Frome, Somerset"],
+["Circumstance","Güneybatı",51.460,-2.555,2018,"Liam Hirt","Bristol"],
+["Dartmoor Whisky","Güneybatı",50.590,-3.675,2015,"Simon Crow","Bovey Tracey, Devon"],
+["Princetown","Güneybatı",50.545,-3.990,2015,"Princetown Distillers","Princetown, Dartmoor"],
+["Penrock","Güneybatı",50.455,-4.465,2008,"Penrock Distillery","Liskeard, Cornwall"],
+["Rosemullion","Güneybatı",50.155,-5.070,2018,"Rosemullion Distillery","Falmouth, Cornwall"],
+["Healeys","Güneybatı",50.265,-5.050,2000,"Healeys Cyder Farm","Truro, Cornwall"],
+["Pocketful of Stones","Güneybatı",50.120,-5.535,2016,"Pocketful of Stones","Penzance, Cornwall"]
+]},
+
+"İrlanda": {
+  flag:"🇮🇪",
+  desc:"Üçlü damıtmanın ve pot still geleneğinin evi. Adada 40+ çalışan damıtımevi.",
+  regions:{
+    "İrlanda Cumhuriyeti":"Midleton'dan (Jameson, Redbreast) Dingle'a; pot still ve modern craft'ın buluştuğu güney.",
+    "Kuzey İrlanda":"Dünyanın en eski lisanslı damıtımevi Bushmills (1608 lisansı) ve Down bölgesinin yeni dalgası."
+  },
+  list:[
+["Midleton","İrlanda Cumhuriyeti",51.915,-8.170,1975,"Pernod Ricard","Midleton, Cork"],
+["Teeling","İrlanda Cumhuriyeti",53.337,-6.277,2015,"Bacardi","Dublin"],
+["Roe & Co","İrlanda Cumhuriyeti",53.343,-6.287,2019,"Diageo","Dublin"],
+["Pearse Lyons","İrlanda Cumhuriyeti",53.340,-6.290,2017,"Bağımsız","Dublin"],
+["Dublin Liberties","İrlanda Cumhuriyeti",53.342,-6.273,2018,"Quintessential Brands","Dublin"],
+["Tullamore","İrlanda Cumhuriyeti",53.270,-7.490,2014,"William Grant & Sons","Tullamore"],
+["Kilbeggan","İrlanda Cumhuriyeti",53.370,-7.500,1757,"Suntory Global Spirits","Kilbeggan"],
+["Cooley","İrlanda Cumhuriyeti",53.995,-6.385,1987,"Suntory Global Spirits","Riverstown, Louth"],
+["Great Northern","İrlanda Cumhuriyeti",54.005,-6.405,2015,"John Teeling","Dundalk"],
+["Slane","İrlanda Cumhuriyeti",53.710,-6.545,2018,"Brown-Forman","Slane, Meath"],
+["Boann","İrlanda Cumhuriyeti",53.710,-6.385,2019,"Cooney ailesi","Drogheda"],
+["Dingle","İrlanda Cumhuriyeti",52.140,-10.275,2012,"Porterhouse Group","Dingle, Kerry"],
+["West Cork","İrlanda Cumhuriyeti",51.550,-9.265,2003,"Bağımsız","Skibbereen"],
+["Clonakilty","İrlanda Cumhuriyeti",51.620,-8.870,2016,"Scully ailesi","Clonakilty, Cork"],
+["Blackwater","İrlanda Cumhuriyeti",52.145,-7.920,2014,"Peter Mulryan","Ballyduff, Waterford"],
+["Royal Oak","İrlanda Cumhuriyeti",52.700,-6.980,2016,"Illva Saronno","Royal Oak, Carlow"],
+["Ballykeefe","İrlanda Cumhuriyeti",52.600,-7.395,2017,"Ging ailesi","Kilkenny"],
+["Powerscourt","İrlanda Cumhuriyeti",53.185,-6.190,2018,"Bağımsız","Enniskerry, Wicklow"],
+["Glendalough","İrlanda Cumhuriyeti",53.010,-6.325,2013,"Mark Anthony Group","Wicklow"],
+["Tipperary","İrlanda Cumhuriyeti",52.475,-8.160,2020,"Ahearn ailesi","Tipperary"],
+["Lough Ree","İrlanda Cumhuriyeti",53.670,-7.985,2018,"Clancy ailesi","Lanesborough"],
+["The Shed","İrlanda Cumhuriyeti",54.045,-8.045,2013,"PJ Rigney","Drumshanbo, Leitrim"],
+["Lough Gill (Athrú)","İrlanda Cumhuriyeti",54.255,-8.380,2019,"Sazerac","Sligo"],
+["Connacht","İrlanda Cumhuriyeti",54.115,-9.155,2014,"Bağımsız","Ballina, Mayo"],
+["Lough Mask","İrlanda Cumhuriyeti",53.610,-9.335,2019,"Bağımsız","Mayo"],
+["Achill Island","İrlanda Cumhuriyeti",53.965,-10.000,2015,"Bağımsız","Achill, Mayo"],
+["Micil","İrlanda Cumhuriyeti",53.260,-9.080,2016,"Ó Griallais ailesi","Galway"],
+["Ahascragh","İrlanda Cumhuriyeti",53.395,-8.335,2018,"McAllister ailesi","Galway"],
+["Burren","İrlanda Cumhuriyeti",53.035,-9.060,2019,"Bağımsız","Clare"],
+["Killarney","İrlanda Cumhuriyeti",52.060,-9.510,2020,"Bağımsız","Killarney, Kerry"],
+["Ardara (Sliabh Liag)","İrlanda Cumhuriyeti",54.770,-8.410,2020,"Sliabh Liag Distillers","Ardara, Donegal"],
+["Crolly","İrlanda Cumhuriyeti",55.045,-8.235,2020,"Bağımsız","Crolly, Donegal"],
+["Old Bushmills","Kuzey İrlanda",55.205,-6.515,1784,"Proximo Spirits","Bushmills, Antrim"],
+["McConnell's","Kuzey İrlanda",54.595,-5.920,2024,"Belfast Distillery Co.","Belfast"],
+["Titanic","Kuzey İrlanda",54.610,-5.895,2023,"Titanic Distillers","Belfast"],
+["Echlinville","Kuzey İrlanda",54.480,-5.530,2013,"Shane Braniff","Kircubbin, Down"],
+["Rademon Estate (Shortcross)","Kuzey İrlanda",54.395,-5.760,2015,"Boyd-Armstrong ailesi","Crossgar, Down"],
+["Killowen","Kuzey İrlanda",54.105,-6.155,2019,"Brendan Carty","Rostrevor, Down"],
+["Hinch","Kuzey İrlanda",54.400,-5.900,2020,"Terry Cross","Ballynahinch, Down"],
+["Copeland","Kuzey İrlanda",54.640,-5.535,2019,"Gareth Irvine","Donaghadee, Down"]
+]},
+
+"Amerika": {
+  flag:"🇺🇸",
+  desc:"Bourbon ve Tennessee whiskey'in vatanı: Kentucky, Tennessee ve yükselen craft damıtımevleri.",
+  regions:{
+    "Kentucky":"Bourbon'un kalbi. Kireçtaşı suyu, sıcak yazlar, hızlı olgunlaşma. Dünya bourbon'unun ~%95'i burada.",
+    "Tennessee":"Lincoln County Process (akçaağaç kömüründen süzme) ile bourbon'dan ayrılır. Jack Daniel's ve Uncle Nearest'ın evi.",
+    "Diğer Eyaletler":"Craft devrimi: Teksas'ın yoğun sıcak iklimi, Pasifik Kuzeybatı'nın single malt'ları, Colorado ve Vermont'un öncüleri."
+  },
+  list:[
+["Buffalo Trace","Kentucky",38.215,-84.870,1775,"Sazerac","Frankfort"],
+["Maker's Mark","Kentucky",37.647,-85.349,1953,"Suntory Global Spirits","Loretto"],
+["Four Roses","Kentucky",38.005,-84.908,1910,"Kirin","Lawrenceburg"],
+["Wild Turkey","Kentucky",38.035,-84.860,1869,"Campari","Lawrenceburg"],
+["Woodford Reserve","Kentucky",38.113,-84.808,1812,"Brown-Forman","Versailles"],
+["Jim Beam","Kentucky",37.931,-85.652,1795,"Suntory Global Spirits","Clermont"],
+["Heaven Hill","Kentucky",37.803,-85.460,1935,"Heaven Hill Brands","Bardstown"],
+["Barton 1792","Kentucky",37.800,-85.475,1879,"Sazerac","Bardstown"],
+["Willett","Kentucky",37.785,-85.455,1936,"Willett Distillery","Bardstown"],
+["Lux Row","Kentucky",37.820,-85.455,2018,"Luxco / MGP","Bardstown"],
+["Bardstown Bourbon Co.","Kentucky",37.835,-85.445,2016,"Pritzker Group","Bardstown"],
+["Castle & Key","Kentucky",38.155,-84.965,1887,"Castle & Key","Millville/Frankfort"],
+["Angel's Envy","Kentucky",38.250,-85.745,2010,"Bacardi","Louisville"],
+["Michter's (Shively)","Kentucky",38.205,-85.785,2012,"Chatham Imports","Louisville"],
+["Old Forester","Kentucky",38.257,-85.752,1870,"Brown-Forman","Louisville"],
+["Rabbit Hole","Kentucky",38.255,-85.737,2018,"Pernod Ricard","Louisville"],
+["Stitzel-Weller","Kentucky",38.190,-85.800,1935,"Diageo","Shively"],
+["Bulleit","Kentucky",38.205,-85.235,2017,"Diageo","Shelbyville"],
+["Green River","Kentucky",37.770,-87.115,1885,"Bardstown Bourbon Co.","Owensboro"],
+["New Riff","Kentucky",39.085,-84.495,2014,"New Riff Distilling","Newport"],
+["Town Branch","Kentucky",38.045,-84.505,2012,"Lexington Brewing & Distilling","Lexington"],
+["Wilderness Trail","Kentucky",37.620,-84.745,2013,"Campari","Danville"],
+["Limestone Branch","Kentucky",37.565,-85.255,2011,"Luxco","Lebanon"],
+["Jack Daniel's","Tennessee",35.285,-86.370,1866,"Brown-Forman","Lynchburg"],
+["Cascade Hollow (George Dickel)","Tennessee",35.375,-86.235,1878,"Diageo","Tullahoma"],
+["Uncle Nearest","Tennessee",35.495,-86.435,2017,"Uncle Nearest Inc.","Shelbyville"],
+["Nelson's Green Brier","Tennessee",36.180,-86.800,1865,"Constellation Brands","Nashville"],
+["Chattanooga Whiskey","Tennessee",35.045,-85.310,2015,"Chattanooga Whiskey Co.","Chattanooga"],
+["Old Dominick","Tennessee",35.135,-90.060,2017,"D. Canale ailesi","Memphis"],
+["Leiper's Fork","Tennessee",35.890,-87.020,2016,"Lee Kennedy","Franklin"],
+["Westland","Diğer Eyaletler",47.580,-122.335,2010,"Rémy Cointreau","Seattle, WA"],
+["Westward","Diğer Eyaletler",45.510,-122.660,2004,"House Spirits","Portland, OR"],
+["Stranahan's","Diğer Eyaletler",39.715,-104.985,2004,"Proximo Spirits","Denver, CO"],
+["Balcones","Diğer Eyaletler",31.555,-97.130,2008,"Diageo","Waco, TX"],
+["Garrison Brothers","Diğer Eyaletler",30.255,-98.565,2006,"Garrison ailesi","Hye, TX"],
+["High West","Diğer Eyaletler",40.645,-111.495,2006,"Constellation Brands","Park City, UT"],
+["WhistlePig","Diğer Eyaletler",43.890,-73.310,2007,"WhistlePig","Shoreham, VT"],
+["Kings County","Diğer Eyaletler",40.700,-73.980,2010,"Kings County Distillery","Brooklyn, NY"],
+["FEW Spirits","Diğer Eyaletler",42.040,-87.690,2011,"FEW Spirits","Evanston, IL"],
+["St. George Spirits","Diğer Eyaletler",37.785,-122.300,1982,"St. George Spirits","Alameda, CA"],
+["Frey Ranch","Diğer Eyaletler",39.445,-118.815,2006,"Frey ailesi","Fallon, NV"],
+["Cedar Ridge","Diğer Eyaletler",41.840,-91.700,2005,"Quint ailesi","Swisher, IA"]
+]},
+
+"Japonya": {
+  flag:"🇯🇵",
+  desc:"Zarafetin ve detay takıntısının viskisi: Hokkaido'dan Okinawa'ya çapraz doğrulanmış damıtımevleri.",
+  regions:{
+    "Hokkaido":"Kuzey adası: serin, nemli, İskoçya benzeri iklim. Taketsuru'nun seçtiği Yoichi ve turba odaklı Akkeshi burada.",
+    "Honshū":"Ana ada: Yamazaki (1923, Japonya'nın ilki), Hakushu'nun orman damıtımevi, Chichibu'nun craft devrimi.",
+    "Kyūshū":"Güney adası: shōchū geleneğinden gelen Kanosuke ve Mars Tsunuki ile yükselen bölge.",
+    "Okinawa":"Subtropikal ada; awamori geleneğinin üstüne kurulan viski üretimi. Hızlı olgunlaşma, tatlı-tropikal profil."
+  },
+  list:[
+["Yoichi","Hokkaido",43.190,140.785,1934,"Nikka (Asahi)","Yoichi"],
+["Akkeshi","Hokkaido",43.045,144.845,2016,"Kenten Jitsugyo","Akkeshi"],
+["Niseko","Hokkaido",42.880,140.745,2021,"Niseko Distillery Co. (Hakkaisan)","Niseko"],
+["Yamazaki","Honshū",34.892,135.674,1923,"Suntory","Shimamoto, Osaka"],
+["Hakushu","Honshū",35.825,138.310,1973,"Suntory","Hokuto, Yamanashi"],
+["Chita","Honshū",35.000,136.840,1972,"Suntory (grain)","Chita, Aichi"],
+["Yamazakura (Sasanokawa)","Honshū",37.385,140.385,1946,"Sasanokawa Shuzo","Koriyama, Fukushima"],
+["Miyagikyo","Honshū",38.300,140.640,1969,"Nikka (Asahi)","Sendai"],
+["Fuji Gotemba","Honshū",35.330,138.890,1973,"Kirin","Gotemba, Shizuoka"],
+["Chichibu","Honshū",36.020,139.090,2008,"Venture Whisky (Akuto)","Chichibu, Saitama"],
+["Mars Shinshu","Honshū",35.765,137.950,1985,"Hombo Shuzo","Miyada, Nagano"],
+["Eigashima (White Oak / Akashi)","Honshū",34.640,134.935,1919,"Eigashima Shuzo","Akashi, Hyogo"],
+["Kurayoshi (Matsui)","Honshū",35.430,133.820,2017,"Matsui Shuzo","Kurayoshi, Tottori"],
+["Sakurao","Honshū",34.345,132.320,2017,"Sakurao B&D","Hatsukaichi, Hiroshima"],
+["Saburomaru","Honshū",36.620,136.965,2017,"Wakatsuru Shuzo","Tonami, Toyama"],
+["Nagahama","Honshū",35.380,136.270,2016,"Nagahama Roman Beer","Nagahama, Shiga"],
+["Shizuoka","Honshū",35.085,138.245,2016,"Gaia Flow","Shizuoka"],
+["Yuza","Honshū",39.015,139.905,2018,"Kinryu","Yuza, Yamagata"],
+["Niigata Kameda","Honshū",37.870,139.105,2021,"Niigata Micro Distillery","Niigata"],
+["Okayama (Miyashita)","Honshū",34.660,133.950,2011,"Miyashita Shuzo","Okayama"],
+["Mars Tsunuki","Kyūshū",31.420,130.345,2016,"Hombo Shuzo","Minamisatsuma, Kagoshima"],
+["Kanosuke","Kyūshū",31.605,130.290,2017,"Komasa Jyozo","Hioki, Kagoshima"],
+["Osuzuyama","Kyūshū",32.235,131.470,2019,"Kuroki Honten","Miyazaki"],
+["Helios","Okinawa",26.595,127.975,1961,"Helios Shuzo","Nago, Okinawa"],
+["Shinzato (Kujira)","Okinawa",26.155,127.670,1846,"Shinzato Shuzo","Naha, Okinawa"]
+]},
+
+"Hindistan": {
+  flag:"🇮🇳",
+  desc:"Dünyanın en çok viski tüketen ülkesi; tropikal olgunlaşmayla ödül toplayan single malt'lar.",
+  regions:{"Hindistan":"Sıcak iklim olgunlaşmayı 3-4 kat hızlandırır. Amrut, Paul John, Rampur ve Indri dünya sahnesinde."},
+  list:[
+["Amrut","Hindistan",13.060,77.480,1948,"Jagdale ailesi","Bengaluru, Karnataka"],
+["Paul John","Hindistan",15.175,73.990,1996,"John Distilleries","Goa"],
+["Rampur","Hindistan",28.815,79.025,1943,"Radico Khaitan","Rampur, Uttar Pradesh"],
+["Indri (Piccadily)","Hindistan",29.880,77.060,2021,"Piccadily Agro","Indri, Haryana"],
+["GianChand","Hindistan",32.690,74.880,1961,"DeVANS Modern Breweries","Jammu"],
+["Solan (Kasauli)","Hindistan",30.900,77.100,1855,"Mohan Meakin","Solan, Himachal Pradesh"]
+]},
+
+"Tayvan": {
+  flag:"🇹🇼",
+  desc:"Subtropikal hız: dünyanın en ödüllü genç viski ülkesi. Kavalan'ın evi.",
+  regions:{"Tayvan":"Sıcak-nemli iklim olgunlaşmayı dramatik hızlandırır. Kavalan 2015'te dünyanın en iyi single malt'ı seçildi."},
+  list:[
+["Kavalan","Tayvan",24.770,121.740,2005,"King Car Group","Yuanshan, Yilan"],
+["Nantou (Omar)","Tayvan",23.940,120.685,2008,"TTL (devlet)","Nantou"],
+["Holy","Tayvan",25.075,121.365,2016,"Holy Distillery","New Taipei"]
+]},
+
+"Almanya": {
+  flag:"🇩🇪",
+  desc:"200'den fazla üretici arasından öne çıkan, ödüllü Alman single malt damıtımevleri.",
+  regions:{"Almanya":"Bavyera Alplerinden Spreewald'a; bira kültürünün malt ustalığını viskiye taşıyan üreticiler."},
+  list:[
+["Slyrs","Almanya",47.735,11.870,1999,"Stetter ailesi","Schliersee, Bavyera"],
+["St. Kilian","Almanya",49.700,9.215,2016,"St. Kilian Distillers","Rüdenau"],
+["Stork Club","Almanya",52.005,13.870,2016,"Spreewood Distillers","Schlepzig, Spreewald"],
+["Elsburn (Hammerschmiede)","Almanya",51.630,10.640,2002,"Hammerschmiede","Zorge, Harz"],
+["Finch","Almanya",48.555,9.790,2008,"Hans-Gerhard Fink","Nellingen, Schwäbische Alb"],
+["Blaue Maus","Almanya",49.770,11.055,1980,"Fleischmann ailesi","Eggolsheim"],
+["Glina","Almanya",52.380,12.935,2004,"Glina Whisky","Werder, Brandenburg"],
+["Eifel Whisky","Almanya",50.195,6.830,2008,"Eifel Destillate","Eifel bölgesi"]
+]},
+
+"Fransa": {
+  flag:"🇫🇷",
+  desc:"Avrupa'nın en çok viski tüketen ülkesi artık üretimde de iddialı: Brötanya'dan Alsas'a.",
+  regions:{"Fransa":"Brötanya öncülüğünde (Armorik 1987'den beri) Alpler, Lorraine ve Bordeaux'ya yayılan terroir odaklı viskisi."},
+  list:[
+["Warenghem (Armorik)","Fransa",48.725,-3.450,1900,"Leizour ailesi","Lannion, Brötanya"],
+["Glann ar Mor","Fransa",48.840,-3.140,1999,"Maison Villevert","Pleubian, Brötanya"],
+["Distillerie des Menhirs (Eddu)","Fransa",47.935,-4.155,1986,"Le Lay ailesi","Plomelin, Brötanya"],
+["Rozelieures","Fransa",48.450,6.450,2007,"Grallet-Dupic ailesi","Rozelieures, Lorraine"],
+["Domaine des Hautes Glaces","Fransa",44.890,5.700,2009,"Rémy Cointreau","Trièves, Alpler"],
+["Castan","Fransa",43.995,2.105,2010,"Castan ailesi","Villeneuve-sur-Vère"],
+["Claeyssens de Wambrechies","Fransa",50.685,3.045,1817,"Grandes Distilleries de Charleville","Wambrechies"],
+["Miclo","Fransa",48.155,7.165,1962,"Miclo ailesi","Lapoutroie, Alsas"],
+["Ninkasi","Fransa",45.895,4.435,2015,"Ninkasi","Tarare, Lyon"],
+["Moon Harbour","Fransa",44.865,-0.555,2016,"Bağımsız","Bordeaux"]
+]},
+
+"Kuzey Ülkeleri": {
+  flag:"❄️",
+  desc:"Nordic viski dalgası: Danimarka, İsveç, Norveç, İzlanda ve Finlandiya'nın öncüleri.",
+  regions:{
+    "Danimarka":"Stauning'in (2005) öncülüğünde Jutland'dan Kopenhag'a yayılan, yerel tahıl odaklı hareket.",
+    "İsveç":"Mackmyra (1999) İskandinav viskisinin yolunu açtı; High Coast ve Smögen'le derinleşti.",
+    "Norveç":"Dünyanın en kuzeydeki damıtımevleri: Kutup Dairesi'nin ötesinde Aurora Spirit ve Myken adası.",
+    "İzlanda":"Eimverk (Flóki): %100 İzlanda arpası, geleneksel turba yerel alternatifle.",
+    "Finlandiya":"Teerenpeli (2002) ve çavdar odaklı Kyrö ile kuzeyin sessiz ama ödüllü üreticileri."
+  },
+  list:[
+["Stauning","Danimarka",55.965,8.375,2005,"Stauning (Distill Ventures)","Skjern, Jutland"],
+["Braunstein","Danimarka",55.455,12.185,2005,"Braunstein ailesi","Køge"],
+["Fary Lochan","Danimarka",55.845,9.245,2009,"Jens-Erik Jørgensen","Give, Jutland"],
+["Thy","Danimarka",56.935,8.475,2010,"Nicolajsen kardeşler","Thisted"],
+["Mosgaard","Danimarka",55.105,10.715,2015,"Mosgaard ailesi","Oure, Fyn"],
+["Copenhagen Distillery","Danimarka",55.640,12.610,2014,"Bağımsız","Kopenhag"],
+["Trolden","Danimarka",55.490,9.470,2011,"Michael Svendsen","Kolding"],
+["Mackmyra","İsveç",60.670,17.100,1999,"Mackmyra Svensk Whisky","Gävle"],
+["High Coast (eski Box)","İsveç",62.985,17.780,2010,"High Coast Distillery","Bjärtrå"],
+["Smögen","İsveç",58.440,11.300,2009,"Pär Caldenby","Hunnebostrand"],
+["Spirit of Hven","İsveç",55.905,12.695,2008,"Molin ailesi","Hven Adası"],
+["Agitator","İsveç",59.395,15.840,2017,"Agitator Whiskymakare","Arboga"],
+["Myken","Norveç",66.760,12.480,2014,"Myken Destilleri","Myken Adası (Kutup Dairesi)"],
+["Aurora Spirit (Bivrost)","Norveç",69.580,20.130,2016,"Aurora Spirit","Lyngen, Troms"],
+["Det Norske Brenneri","Norveç",58.340,8.590,1952,"Puni Yatırım","Grimstad"],
+["Eimverk (Flóki)","İzlanda",64.070,-21.920,2009,"Thorkelsson ailesi","Garðabær, Reykjavík"],
+["Teerenpeli","Finlandiya",60.980,25.660,2002,"Anssi Pyysing","Lahti"],
+["Kyrö","Finlandiya",63.005,22.320,2014,"Kyrö Distillery Company","Isokyrö"],
+["Helsinki Distilling Co.","Finlandiya",60.180,24.970,2014,"Bağımsız","Helsinki"]
+]},
+
+"Diğer Avrupa": {
+  flag:"🇪🇺",
+  desc:"Galler'den Karpatlar'a: Avrupa'nın öne çıkan diğer viski üreticileri.",
+  regions:{
+    "Galler":"Penderyn (2000) Galler'de bir asır sonra viskiyi yeniden başlattı.",
+    "İtalya":"Puni (2012): Güney Tirol Alplerinde İtalya'nın ilk malt damıtımevi.",
+    "Belçika & Hollanda":"Belgian Owl ve Filliers'ın ödüllü single malt'ları; Zuidam ve Us Heit'ın ustlığı.",
+    "İsviçre & Avusturya":"Alp viskileri: Säntis'in bira fıçıları, Reisetbauer'in hassasiyeti.",
+    "Orta Avrupa":"Çekya'nın tarihi Gold Cock'u (1877) ve Slovakya Karpatlarının Nestville'i.",
+    "İspanya":"DYC (1959): Segovia'da yarım asırlık viski geleneği."
+  },
+  list:[
+["Penderyn","Galler",51.775,-3.485,2000,"Welsh Whisky Company","Penderyn, Brecon Beacons"],
+["Aber Falls","Galler",53.230,-4.000,2017,"Halewood Artisanal Spirits","Abergwyngregyn"],
+["Dà Mhìle","Galler",52.040,-4.400,2016,"Savage-Onstwedder ailesi","Llandysul"],
+["Puni","İtalya",46.670,10.555,2012,"Ebensperger ailesi","Glorenza, Güney Tirol"],
+["Belgian Owl","Belçika & Hollanda",50.660,5.400,2004,"Etienne Bouillon","Grâce-Hollogne, Liège"],
+["Filliers","Belçika & Hollanda",50.970,3.500,2008,"Filliers ailesi","Deinze"],
+["Zuidam (Millstone)","Belçika & Hollanda",51.440,4.930,1975,"Zuidam ailesi","Baarle-Nassau"],
+["Us Heit (Frysk Hynder)","Belçika & Hollanda",53.060,5.520,2002,"Aart van der Linde","Bolsward, Friesland"],
+["Säntis Malt","İsviçre & Avusturya",47.330,9.410,1999,"Locher Bira Fabrikası","Appenzell"],
+["Langatun","İsviçre & Avusturya",47.240,7.770,2007,"Langatun Distillery","Aarwangen"],
+["Waldviertler J.H.","İsviçre & Avusturya",48.480,15.070,1995,"Haider ailesi","Roggenreith"],
+["Reisetbauer","İsviçre & Avusturya",48.270,14.180,1995,"Hans Reisetbauer","Axberg, Linz"],
+["Gold Cock","Orta Avrupa",49.220,17.850,1877,"Rudolf Jelínek","Vizovice, Çekya"],
+["Nestville","Orta Avrupa",49.300,20.620,2008,"BGV","Hniezdne, Slovakya"],
+["DYC","İspanya",40.960,-4.050,1959,"Suntory Global Spirits","Palazuelos de Eresma, Segovia"]
+]},
+
+"Asya": {
+  flag:"🌏",
+  desc:"Yükselen dev: Çin'in mega damıtımevleri, Kore'nin ilk single malt'ı, İsrail ve Pakistan.",
+  regions:{
+    "Çin":"Sichuan'da iki dev: Pernod Ricard'ın The Chuan'ı ve Laizhou.",
+    "Güney Kore":"Three Societies (2020): Kore'nin ilk single malt damıtımevi, 'Ki One' markasıyla.",
+    "İsrail":"Milk & Honey (Tel Aviv): sıcak iklim olgunlaşmasıyla dünya ödülleri kazanan Akdeniz viskisi.",
+    "Pakistan":"Murree (1860): İslam dünyasının en eski ve tek büyük viski üreticisi."
+  },
+  list:[
+["The Chuan","Çin",29.600,103.480,2021,"Pernod Ricard","Emeishan, Sichuan"],
+["Laizhou","Çin",30.410,103.460,2021,"Bacchus Group","Qionglai, Sichuan"],
+["Three Societies (Ki One)","Güney Kore",37.640,127.310,2020,"Bryan Do","Namyangju, Gyeonggi"],
+["Milk & Honey","İsrail",32.055,34.780,2014,"M&H Distillery","Tel Aviv"],
+["Golan Heights","İsrail",32.990,35.690,2014,"David Zibell","Katzrin"],
+["Murree","Pakistan",33.600,73.050,1860,"Murree Brewery Co.","Rawalpindi"]
+]},
+
+"Avustralya": {
+  flag:"🇦🇺",
+  desc:"Tazmanya'nın serin ada iklimi ve ana karanın cesur deneyleri: öne çıkan 18 damıtımevi.",
+  regions:{
+    "Tazmanya":"Avustralya viskisinin kalbi. Lark (1992) modern dalgayı başlattı; Sullivans Cove 2014'te dünyanın en iyi single malt'ı seçildi.",
+    "Ana Kara":"Starward'ın şarap fıçılı Melbourne tarzından Batı Avustralya'nın Limeburners'ına."
+  },
+  list:[
+["Sullivans Cove","Tazmanya",-42.830,147.440,1994,"Adams ailesi","Cambridge, Hobart"],
+["Lark","Tazmanya",-42.880,147.330,1992,"Lark Distilling Co.","Hobart"],
+["Hellyers Road","Tazmanya",-41.070,145.880,1999,"Betta Milk Co-op","Burnie"],
+["Overeem","Tazmanya",-42.900,147.320,2007,"Sawford ailesi","Hobart"],
+["Belgrove","Tazmanya",-42.530,147.200,2010,"Peter Bignell","Kempton"],
+["Adams","Tazmanya",-41.570,147.170,2016,"Adam Saunders","Perth, Tazmanya"],
+["Launceston","Tazmanya",-41.440,147.140,2013,"Launceston Distillery","Launceston"],
+["Spring Bay","Tazmanya",-42.550,147.910,2015,"Turner ailesi","Spring Beach"],
+["Starward","Ana Kara",-37.830,144.930,2007,"David Vitale (Diageo ortağı)","Port Melbourne"],
+["Bakery Hill","Ana Kara",-37.800,145.320,1998,"David Baker","Kilsyth, Melbourne"],
+["Archie Rose","Ana Kara",-33.920,151.190,2014,"Will Edwards","Rosebery, Sidney"],
+["Limeburners (Great Southern)","Ana Kara",-35.010,117.890,2004,"Cameron Syme","Albany, WA"],
+["Whipper Snapper","Ana Kara",-31.960,115.870,2014,"Whipper Snapper Distillery","Perth, WA"],
+["Tin Shed (Iniquity)","Ana Kara",-34.920,138.600,2015,"Tin Shed Distilling","Adelaide, SA"],
+["Fleurieu","Ana Kara",-35.500,138.780,2016,"Gemma & Angus John","Goolwa, SA"],
+["Morris","Ana Kara",-36.050,146.460,2016,"Casella ailesi","Rutherglen, Victoria"],
+["Chief's Son","Ana Kara",-38.220,145.180,2017,"McIntosh ailesi","Somerville, Victoria"],
+["Black Gate","Ana Kara",-31.820,148.970,2009,"Brian & Genise Hollingworth","Mendooran, NSW"]
+]},
+
+"Afrika": {
+  flag:"🌍",
+  desc:"Kıtanın viski öncüleri: Güney Afrika'nın ödüllü üreticileri.",
+  regions:{"Güney Afrika":"James Sedgwick (1886): Three Ships ve Bain's Cape Mountain'ın evi. Drayman's: Pretoria'nın craft öncüsü."},
+  list:[
+["James Sedgwick","Güney Afrika",-33.640,19.010,1886,"Heineken Beverages","Wellington, Western Cape"],
+["Drayman's","Güney Afrika",-25.730,28.270,2006,"Moritz Kallmeyer","Silverton, Pretoria"]
+]}
+};
+
+/* ============================================================
+   UYGULAMA
+   ============================================================ */
+const homeEl = document.getElementById('home');
+const mapviewEl = document.getElementById('mapview');
+const countriesEl = document.getElementById('countries');
+const chipsEl = document.getElementById('chips');
+const infoEl = document.getElementById('info');
+const searchEl = document.getElementById('search');
+
+let map = null, groups = {}, allMarkers = [], curCountry = null, activeRegion = null;
+
+let grandTotal = 0;
+Object.keys(COUNTRIES).forEach(name=>{
+  const c = COUNTRIES[name];
+  grandTotal += c.list.length;
+  const card = document.createElement('div');
+  card.className='ccard';
+  card.innerHTML = `<span class="flag">${c.flag}</span>
+    <span class="cname">${name}</span>
+    <span class="ccount">${c.list.length} damıtımevi · ${Object.keys(c.regions).length} bölge</span>
+    <span class="cdesc">${c.desc}</span>`;
+  card.onclick = ()=>openCountry(name);
+  countriesEl.appendChild(card);
+});
+document.getElementById('homefoot').textContent =
+  `Toplam ${grandTotal} çapraz doğrulanmış damıtımevi · ${Object.keys(COUNTRIES).length} ülke/kategori · Yalnızca piyasaya çıkmış viski üreticileri (2026)`;
+
+function openCountry(name){
+  curCountry = name; activeRegion = null;
+  const c = COUNTRIES[name];
+  homeEl.classList.add('hidden');
+  mapviewEl.classList.remove('hidden');
+  document.getElementById('cflag').textContent = c.flag;
+  document.getElementById('cname').textContent = name;
+  searchEl.value = '';
+
+  if(!map){
+    map = L.map('map',{scrollWheelZoom:true});
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+      attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:18
+    }).addTo(map);
+  } else {
+    Object.values(groups).forEach(g=>map.removeLayer(g));
+  }
+  map.invalidateSize();
+
+  groups = {}; allMarkers = [];
+  const regionNames = Object.keys(c.regions);
+  regionNames.forEach(r=>groups[r]=L.featureGroup());
+  c.list.forEach(d=>{
+    const [nm,reg,lat,lng,yr,owner,loc] = d;
+    const col = PALETTE[regionNames.indexOf(reg) % PALETTE.length];
+    const m = L.circleMarker([lat,lng],{radius:7,fillColor:col,color:'#16120d',weight:1.5,fillOpacity:.92})
+      .bindPopup(`<div class="pp"><span class="reg" style="background:${col}">${reg}</span>`+
+        `<h3>${nm}</h3><div>📍 ${loc}<br>🏛 Kuruluş: ${yr}<br>🥃 Sahibi: ${owner}</div></div>`)
+      .bindTooltip(nm,{direction:'top',offset:[0,-6]});
+    m._name = nm.toLowerCase(); m._region = reg;
+    groups[reg].addLayer(m); allMarkers.push(m);
+  });
+
+  chipsEl.innerHTML='';
+  if(regionNames.length > 1){
+    const allChip = document.createElement('button');
+    allChip.className='chip active'; allChip.dataset.r='all';
+    allChip.innerHTML=`<span class="dot" style="background:var(--amber)"></span>Tümü <span class="n">${c.list.length}</span>`;
+    allChip.onclick=()=>showRegion(null);
+    chipsEl.appendChild(allChip);
+    regionNames.forEach((r,i)=>{
+      const b=document.createElement('button');
+      b.className='chip'; b.dataset.r=r;
+      b.innerHTML=`<span class="dot" style="background:${PALETTE[i%PALETTE.length]}"></span>${r} <span class="n">${groups[r].getLayers().length}</span>`;
+      b.onclick=()=>showRegion(r);
+      chipsEl.appendChild(b);
+    });
+  }
+
+  Object.values(groups).forEach(g=>g.addTo(map));
+  const all = L.featureGroup(Object.values(groups));
+  map.fitBounds(all.getBounds().pad(0.18));
+  infoEl.innerHTML = `<b>${name}</b> — ${c.list.length} damıtımevi. ${c.desc}` +
+    (regionNames.length>1 ? ' Bölge çiplerine tıklayarak yakınlaşın.' : '');
+}
+
+function showRegion(region){
+  const c = COUNTRIES[curCountry];
+  Object.values(groups).forEach(g=>map.removeLayer(g));
+  document.querySelectorAll('.chip').forEach(ch=>ch.classList.remove('active'));
+  if(region && region !== activeRegion){
+    activeRegion = region;
+    groups[region].addTo(map);
+    map.flyToBounds(groups[region].getBounds().pad(0.25),{duration:.8});
+    const el = document.querySelector(`[data-r="${region}"]`); if(el) el.classList.add('active');
+    infoEl.innerHTML = `<b>${region}</b> — ${groups[region].getLayers().length} damıtımevi. ${c.regions[region]}`;
+  } else {
+    activeRegion = null;
+    Object.values(groups).forEach(g=>g.addTo(map));
+    const all = L.featureGroup(Object.values(groups));
+    map.flyToBounds(all.getBounds().pad(0.18),{duration:.8});
+    const el = document.querySelector('[data-r="all"]'); if(el) el.classList.add('active');
+    infoEl.innerHTML = `<b>${curCountry}</b> — tüm bölgeler, ${c.list.length} damıtımevi.`;
+  }
+}
+
+document.getElementById('backbtn').onclick = ()=>{
+  mapviewEl.classList.add('hidden');
+  homeEl.classList.remove('hidden');
+};
+
+searchEl.addEventListener('input', e=>{
+  const q = e.target.value.trim().toLowerCase();
+  if(!q) return;
+  const hit = allMarkers.find(m=>m._name.includes(q));
+  if(hit){
+    if(activeRegion && hit._region !== activeRegion) showRegion(null);
+    map.flyTo(hit.getLatLng(), 10, {duration:.7});
+    setTimeout(()=>hit.openPopup(), 750);
+  }
+});
+</script>
+</body>
+</html>
