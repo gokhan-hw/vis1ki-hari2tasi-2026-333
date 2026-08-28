@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <title>Dünya Viski Haritası — Ülkeler, Bölgeler, Damıtımevleri</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
+      onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'">
 <style>
   :root{
     --bg:#16120d; --panel:#211a12; --panel2:#2a2118; --text:#f0e6d6; --muted:#b8a888;
@@ -63,6 +64,11 @@
   .info b{color:var(--amber)}
   .leaflet-popup-content-wrapper{background:var(--panel2);color:var(--text);border-radius:10px;border:1px solid var(--amber)}
   .leaflet-popup-tip{background:var(--panel2)}
+  .leaflet-tile-pane.hv-dark{filter:invert(1) hue-rotate(180deg) brightness(.82) contrast(.92) saturate(.55)}
+  #basemapbadge{position:absolute;left:10px;bottom:10px;z-index:600;background:rgba(22,18,13,.82);
+    border:1px solid rgba(224,179,65,.35);color:var(--muted);font-size:11px;padding:3px 8px;
+    border-radius:6px;pointer-events:none;letter-spacing:.2px}
+  #map{position:relative}
   .pp h3{color:var(--amber);font-size:1rem;margin-bottom:4px;font-family:Georgia,serif}
   .pp div{font-size:.82rem;color:var(--muted);line-height:1.5}
   .pp .reg{display:inline-block;padding:1px 8px;border-radius:10px;font-size:.72rem;color:#16120d;margin-bottom:6px}
@@ -101,8 +107,83 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
+  if(!window.L){ document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>'); }
+</script>
+<script>
+  if(!window.L){ document.write('<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"><\/script>'); }
+</script>
+<script>
+// --- Karo (tile) kaynakları: sırayla denenir, erişilemeyen atlanır ---
+const TILE_SOURCES = [
+  { name:'Esri Dark Gray',
+    base:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    ref :'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    attr:'Tiles &copy; Esri, HERE, Garmin, &copy; OpenStreetMap katkıcıları',
+    maxNative:16, dark:false },
+  { name:'Esri Dark Gray (yedek sunucu)',
+    base:'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    ref :'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    attr:'Tiles &copy; Esri, HERE, Garmin, &copy; OpenStreetMap katkıcıları',
+    maxNative:16, dark:false },
+  { name:'OpenStreetMap (koyu filtre)',
+    base:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    ref :null,
+    attr:'&copy; OpenStreetMap katkıcıları',
+    maxNative:19, dark:true }
+];
+
+let basemapLayers = [], basemapIdx = -1;
+
+function setBasemap(map, i){
+  if(i >= TILE_SOURCES.length){
+    const inFrame = (function(){ try { return window.self !== window.top; } catch(e){ return true; } })();
+    const el = document.getElementById('basemapbadge');
+    if(inFrame || location.protocol === 'file:'){
+      el.innerHTML = 'Zemin haritası bu önizlemede yüklenemez. Dosyayı tarayıcıda (ya da yayındaki adresinde) aç.';
+    } else {
+      el.textContent = 'Zemin haritası yüklenemedi (ağ engeli olabilir)';
+    }
+    el.style.maxWidth = '320px';
+    el.style.whiteSpace = 'normal';
+    el.style.lineHeight = '1.45';
+    console.warn('[harita] Denenen karo kaynaklarının hepsi başarısız:',
+      TILE_SOURCES.map(t=>t.base));
+    return;
+  }
+  basemapIdx = i;
+  const src = TILE_SOURCES[i];
+
+  basemapLayers.forEach(l=>map.removeLayer(l));
+  basemapLayers = [];
+
+  const pane = map.getPane('tilePane');
+  pane.classList.toggle('hv-dark', !!src.dark);
+
+  let errors = 0, ok = false, decided = false;
+  const base = L.tileLayer(src.base, {
+    attribution: src.attr, maxNativeZoom: src.maxNative, maxZoom: 18
+  });
+  base.on('tileload', ()=>{ ok = true; decided = true;
+    document.getElementById('basemapbadge').textContent = 'Zemin: ' + src.name; });
+  base.on('tileerror', ()=>{
+    errors++;
+    if(!ok && !decided && errors >= 3){ decided = true; setBasemap(map, i+1); }
+  });
+  base.addTo(map);
+  basemapLayers.push(base);
+
+  if(src.ref){
+    const ref = L.tileLayer(src.ref, { maxNativeZoom: src.maxNative, maxZoom: 18, pane:'labels' });
+    ref.addTo(map);
+    basemapLayers.push(ref);
+  }
+
+  // hiç tileload gelmezse (sessiz blok) 6 sn sonra sıradakine geç
+  setTimeout(()=>{ if(!ok && !decided){ decided = true; setBasemap(map, i+1); } }, 5000);
+}
+
 const PALETTE = ["#e0b341","#c96f3f","#7fae6a","#5a8f8f","#b85c6e","#8a7fc4","#cc8f5e","#6a9ab0"];
 
 const COUNTRIES = {
@@ -682,11 +763,21 @@ function openCountry(name){
   document.getElementById('cname').textContent = name;
   searchEl.value = '';
 
+  if(!window.L){
+    document.getElementById('map').innerHTML =
+      '<div style="padding:24px;text-align:center;color:#e0b341;font-size:14px;line-height:1.6">Harita kütüphanesi (Leaflet) yüklenemedi.<br>İnternet bağlantını, reklam engelleyiciyi ya da ağ kısıtlamasını kontrol edip sayfayı yenile.</div>';
+    return;
+  }
   if(!map){
     map = L.map('map',{scrollWheelZoom:true});
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
-      attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:18
-    }).addTo(map);
+    map.createPane('labels');
+    map.getPane('labels').style.zIndex = 350;
+    map.getPane('labels').style.pointerEvents = 'none';
+    const badge = document.createElement('div');
+    badge.id = 'basemapbadge';
+    badge.textContent = 'Zemin yükleniyor...';
+    document.getElementById('map').appendChild(badge);
+    setBasemap(map, 0);
   } else {
     Object.values(groups).forEach(g=>map.removeLayer(g));
   }
